@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GPT-4 Chatbot</title>
+</head>
+<body>
+    
+    <div style="width: 600px; margin: 50px auto;">
+        <!-- Prompt to load a previous conversation -->
+        <div>
+            <label for="model">Choose Model:</label>
+            <select id="model" name="model">
+                <option value="gpt-4-1106-preview">gpt-4-1106-preview</option>
+                <option value="gpt-4">gpt-4</option>
+                <option value="gpt-4-0613">gpt-4-0613</option>
+                <option value="gpt-4-0314">gpt-4-0314</option>
+                <option value="gpt-4-turbo-preview">gpt-4-turbo-preview</option>
+            </select>
+        </div>        
+        <div>
+            <label for="temperature">Temperature:</label>
+            <input type="number" id="temperature" name="temperature" min="0" max="1" step="0.01" value="0.7">
+            
+            <label for="presence_penalty">Presence Penalty:</label>
+            <input type="number" id="presence_penalty" name="presence_penalty" min="0" max="2" step="0.01" value="0.0">
+            
+            <label for="repetition_penalty">Repetition Penalty:</label>
+            <input type="number" id="repetition_penalty" name="repetition_penalty" min="0" max="2" step="0.01" value="0.0">
+
+            <button onclick="clearChat()">Clear Chat</button>
+
+        </div>
+        <br>
+        <div>
+            <label for="system-prompt">System Prompt:</label>
+            <textarea id="system-prompt" style="width: 100%; height: 80px;">{{ system_prompt }}</textarea>
+            <button onclick="updateSystemPrompt()">Update System Prompt</button>
+        </div>
+        <br>
+        <div>
+            <label>Load a previous conversation?</label>
+            <input type="radio" name="load_previous" value="yes"> Yes
+            <input type="radio" name="load_previous" value="no"> No
+        </div>
+
+        <!-- Input for the conversation path (hidden by default) -->
+        <div id="path_input" style="display: none;">
+            <label for="conversation_path">Path to the conversation file:</label>
+            <input type="text" id="conversation_path" name="conversation_path">
+            <button onclick="loadConversation()">Load Conversation</button>
+        </div>
+        <br>
+
+        <div id="chat-box" style="border: 1px solid black; height: 600px; padding: 10px; overflow-y: scroll;"></div>
+        <br>
+        <textarea id="user-message" style="width: 100%; height: 150px;"></textarea>
+        <br><br>
+        <button onclick="sendMessage()">Send</button>
+    </div>
+    
+    <script>
+        function updateSystemPrompt() {
+            const systemPrompt = document.getElementById('system-prompt').value;
+            
+            fetch('/update_prompt', {
+                method: 'POST',
+                body: new URLSearchParams({ 'system_prompt': systemPrompt }),
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    alert('System prompt updated successfully.');
+                } else {
+                    alert(data.message);  // Display any error messages
+                }
+            });
+        }
+        function appendMessage(role, content) {
+            const chatBox = document.getElementById('chat-box');
+            // Convert newline characters to HTML line breaks
+            content = content.replace(/\n/g, '<br>');
+            chatBox.innerHTML += `<b>${role}:</b> ${content}<br>`;
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        function sendMessage() {
+            const model = document.getElementById('model').value;
+            const userMessage = document.getElementById('user-message').value;
+            const temperature = document.getElementById('temperature').value;
+            const presence_penalty = document.getElementById('presence_penalty').value;
+            const repetition_penalty = document.getElementById('repetition_penalty').value;appendMessage('You', userMessage);
+            
+            // Display a "waiting" message
+            appendMessage('Chatbot', '...Waiting for response...');
+            
+            fetch('/ask', {
+                method: 'POST',
+                body: new URLSearchParams({ 
+                    'user_message': userMessage,
+                    'temperature': temperature,
+                    'presence_penalty': presence_penalty,
+                    'repetition_penalty': repetition_penalty,
+                    'model': model // Include the model in the request
+                }),
+                
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Remove the "waiting" message
+                const chatBox = document.getElementById('chat-box');
+                chatBox.innerHTML = chatBox.innerHTML.replace('<b>Chatbot:</b> ...Waiting for response...<br>', '');
+                
+                // Display the chatbot's response
+                appendMessage('Chatbot', data.bot_response);
+            });
+            
+            document.getElementById('user-message').value = '';
+        }
+        
+
+        // JavaScript to show/hide the path input based on user's choice
+        document.querySelectorAll('input[name="load_previous"]').forEach((elem) => {
+            elem.addEventListener('change', function() {
+                if (this.value === 'yes') {
+                    document.getElementById('path_input').style.display = 'block';
+                } else {
+                    document.getElementById('path_input').style.display = 'none';
+                }
+            });
+        });
+
+        function loadConversation() {
+            // Use AJAX to send a request to the Flask route to load the conversation
+            const path = document.getElementById('conversation_path').value;
+            fetch('/load_conversation', {
+                method: 'POST',
+                body: new URLSearchParams({ 'conversation_path': path }),
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    // Display the loaded messages
+                    for (let message of data.messages) {
+                        appendMessage(message.role, message.content);
+                    }
+                } else {
+                    alert(data.message);  // Display any error messages
+                }
+            });
+        }
+        function clearChat() {
+            fetch('/clear_chat', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    document.getElementById('chat-box').innerHTML = '';  // Clear chat box
+                    alert('Chat history cleared.');
+                } else {
+                    alert(data.message);  // Display any error messages
+                }
+            });
+        }
+        
+    </script>
+</body>
+</html>

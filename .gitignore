@@ -1,0 +1,14 @@
+*.DS_Store
+*.zip
+resume_corpus/
+model/
+__pycache__
+saved_conversations/
+job_descriptions/
+parsed_resume_jsons/
+gpt4data.csv
+alpaca_more.csv
+gpt4_parsing.json
+new_baseline_comparison.json
+*.csv
+*.txt
